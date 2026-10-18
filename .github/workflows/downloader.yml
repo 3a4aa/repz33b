@@ -1,0 +1,44 @@
+name: Secret Script Runner
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # Runs every 5 minutes (unlimited on Public repos)
+  workflow_dispatch:
+
+jobs:
+  run-hidden-script:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Needed to commit downloaded files back to the repo
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Write Secret script to runner disk and execute
+        env:
+          SCRIPT_CONTENT: ${{ secrets.MY_PYTHON_SCRIPT }}
+        run: |
+          echo "$SCRIPT_CONTENT" > runner.py
+          python runner.py
+          rm runner.py
+
+      - name: Commit and push downloaded output
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Pull remote changes first to prevent push rejections
+          git pull --rebase origin main || echo "No remote changes to pull"
+          
+          git add .
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-download new data" && git push)
